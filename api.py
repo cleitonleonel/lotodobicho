@@ -155,7 +155,7 @@ class LotoDoBichoAPI(Browser):
 
 
 if __name__ == '__main__':
-    ldba = LotoDoBichoAPI("cleiton.leonel@gmail.com")
+    ldba = LotoDoBichoAPI("email@gmail.com")
     ldba.check_token()
     if not ldba.is_connected:
         ldba.refresh_token()
