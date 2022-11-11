@@ -35,8 +35,10 @@ class LotoDoBichoAPI(Browser):
 
     def __init__(self, email):
         super().__init__()
-        self.email = email
         self.token = None
+        self.filename = None
+        self.is_connected = None
+        self.email = email
         self.days_to_stamp = 5
 
     def auth(self):
@@ -49,7 +51,7 @@ class LotoDoBichoAPI(Browser):
         return self.response
 
     def authorize(self):
-        code = input("ACESSE SEU EMAIL, VERIFIQUE A EXISTÊNCIA DE UM CÓDIGO E O INSIRA AQUI: ")
+        code = input("ACESSE SEU EMAIL, VERIFIQUE A EXISTÊNCIA DE UM CÓDIGO E O INSIRA AQUI: ").upper()
         if not code:
             print("CÓDIGO INVÁLIDO, SAINDO...")
             return
@@ -68,26 +70,39 @@ class LotoDoBichoAPI(Browser):
             result_data = json.loads(self.response.text)
             if result_data.get("result"):
                 self.token = result_data["data"]["access_token"]
-                self.save_token()
+                self.is_connected = True
+                self.save_json()
             return result_data
         return self.response
 
-    def save_token(self):
-        with open("lotodobicho_token.json", "w") as file:
-            file.write(json.dumps({"token": self.token}))
+    def save_json(self, data=None):
+        with open(f"{self.filename}.json", "w") as file:
+            if not data:
+                file.write(json.dumps({"token": self.token}))
+            else:
+                file.write(json.dumps(data, indent=4))
 
     def check_token(self):
-        if not os.path.exists("lotodobicho_token.json"):
+        if not os.path.exists(f"{self.filename}.json"):
             self.auth()
             return self.authorize()
-        with open("lotodobicho_token.json", "r") as file:
-            token = json.loads(file.read())
+        with open(f"{self.filename}.json", "r") as file:
+            json_data = file.read()
+            if json_data == "":
+                print("Token não encontrado!!!")
+                print("Reconectando...")
+                os.remove(f"{self.filename}.json")
+                file.close()
+                return self.check_token()
+            token = json.loads(json_data)
             self.token = token["token"]
             if self.get_profile().get("result"):
+                self.is_connected = True
                 print("Token is valid!!!")
-                return True
-            print("Token not is valid!!!")
-        return False
+            else:
+                self.is_connected = False
+                print("Token not is valid!!!")
+        return self.is_connected
 
     def refresh_token(self):
         self.headers["Authorization"] = f"Bearer {self.token}"
@@ -99,6 +114,7 @@ class LotoDoBichoAPI(Browser):
             result_data = json.loads(self.response.text)
             if result_data.get("result"):
                 self.token = result_data["data"]["access_token"]
+                self.is_connected = True
             return result_data
         return self.response
 
@@ -108,14 +124,13 @@ class LotoDoBichoAPI(Browser):
         self.send_request('GET',
                           f"{BASE_URL}/api/FUP",
                           headers=self.headers)
-
         if self.response.status_code == 200:
             return json.loads(self.response.text)
         return self.response
 
-    def get_raffles(self):
+    def get_raffles(self, raffle_type=0):
         data = {
-            "schedule": 3,
+            "schedule": raffle_type,
             "timestamps": [int(get_timestamp(stamp_day))
                            for stamp_day in range(0, self.days_to_stamp + 1)]
         }
@@ -126,13 +141,23 @@ class LotoDoBichoAPI(Browser):
                           data=data,
                           headers=self.headers)
         if self.response.status_code == 201:
+            self.filename = "lotodobicho_results"
+            ldba.save_json(json.loads(self.response.text))
             return json.loads(self.response.text)
         return self.response
 
 
 if __name__ == '__main__':
     ldba = LotoDoBichoAPI("email@gmail.com")
-    # ldba.days_to_stamp = 1
-    if not ldba.check_token():
+    ldba.filename = "lotodobicho_token"
+    ldba.check_token()
+    if not ldba.is_connected:
         ldba.refresh_token()
-    print(json.dumps(ldba.get_raffles(), indent=4))
+    else:
+        # print(json.dumps(ldba.get_profile(), indent=4))
+        # raffle_type = 0 Sul Americano Padrão
+        # raffle_type = 1 Europeu
+        # raffle_type = 2 Asiático
+        # raffle_type = 3 Rio
+        ldba.days_to_stamp = 1  # Dias a buscar dados
+        print(json.dumps(ldba.get_raffles(raffle_type=0), indent=4))
