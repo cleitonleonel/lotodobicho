@@ -86,9 +86,10 @@ class LotoDoBichoAPI(Browser):
     def check_token(self):
         self.filename = "lotodobicho_token"
         if not os.path.exists(f"{self.filename}.json"):
+            print("Gerando novo token...")
             login = self.auth()
             if login["error"]:
-                print(f"Usuário {self.email} é inválido!!!")
+                print(f"Erro, usuário {self.email} é inválido!!!")
                 exit()
             return self.authorize()
         with open(f"{self.filename}.json", "r") as file:
@@ -101,7 +102,6 @@ class LotoDoBichoAPI(Browser):
                 return self.check_token()
             token = json.loads(json_data)
             self.token = token["token"]
-
             if self.token and self.get_profile().get("result"):
                 self.is_connected = True
                 print("Token is valid!!!")
@@ -134,7 +134,7 @@ class LotoDoBichoAPI(Browser):
                           headers=self.headers)
         if self.response.status_code == 200:
             return json.loads(self.response.text)
-        return self.response
+        return {"result": False, "message": "Token inválido!!!"}
 
     def get_raffles(self, raffle_type=0):
         data = {
